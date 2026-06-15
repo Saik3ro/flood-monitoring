@@ -1,7 +1,6 @@
-import { useEffect, useRef } from "react";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
+import { useEffect, useRef, useState } from "react";
 import type { Camera } from "@/lib/subay/types";
+import type * as Leaflet from "leaflet";
 
 const COLORS: Record<Camera["floodStatus"], string> = {
   NORMAL: "#22c55e",
@@ -9,7 +8,7 @@ const COLORS: Record<Camera["floodStatus"], string> = {
   DANGER: "#ef4444",
 };
 
-function pinIcon(color: string) {
+function pinIcon(L: typeof Leaflet, color: string) {
   const html = `
     <div style="position:relative;width:28px;height:36px;">
       <div style="position:absolute;inset:0;background:${color};-webkit-mask:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><path d=%22M12 2C8 2 5 5 5 9c0 5 7 13 7 13s7-8 7-13c0-4-3-7-7-7z%22/></svg>') center/contain no-repeat;mask:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><path d=%22M12 2C8 2 5 5 5 9c0 5 7 13 7 13s7-8 7-13c0-4-3-7-7-7z%22/></svg>') center/contain no-repeat;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3));"></div>
@@ -28,19 +27,30 @@ export function CameraMap({
   height?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<L.Map | null>(null);
-  const markersRef = useRef<Map<string, L.Marker>>(new Map());
+  const mapRef = useRef<Leaflet.Map | null>(null);
+  const LRef = useRef<typeof Leaflet | null>(null);
+  const markersRef = useRef<Map<string, Leaflet.Marker>>(new Map());
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (!ref.current || mapRef.current) return;
-    const map = L.map(ref.current, { zoomControl: true }).setView([8.4822, 124.6413], 13);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "© OpenStreetMap contributors",
-      maxZoom: 19,
-    }).addTo(map);
-    mapRef.current = map;
+    let cancelled = false;
+    (async () => {
+      const mod = await import("leaflet");
+      await import("leaflet/dist/leaflet.css");
+      if (cancelled || !ref.current) return;
+      const L = mod.default ?? mod;
+      LRef.current = L;
+      const map = L.map(ref.current, { zoomControl: true }).setView([8.4822, 124.6413], 13);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "© OpenStreetMap contributors",
+        maxZoom: 19,
+      }).addTo(map);
+      mapRef.current = map;
+      setReady(true);
+    })();
     return () => {
-      map.remove();
+      cancelled = true;
+      mapRef.current?.remove();
       mapRef.current = null;
       markersRef.current.clear();
     };
@@ -48,7 +58,8 @@ export function CameraMap({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    const L = LRef.current;
+    if (!map || !L || !ready) return;
     const existing = markersRef.current;
     const nextIds = new Set(cameras.map((c) => c.id));
     for (const [id, m] of existing) {
@@ -67,16 +78,16 @@ export function CameraMap({
         </div>`;
       let m = existing.get(c.id);
       if (!m) {
-        m = L.marker([c.coordinates.lat, c.coordinates.lng], { icon: pinIcon(COLORS[c.floodStatus]) }).addTo(map);
+        m = L.marker([c.coordinates.lat, c.coordinates.lng], { icon: pinIcon(L, COLORS[c.floodStatus]) }).addTo(map);
         m.on("click", () => onSelect?.(c.id));
         existing.set(c.id, m);
       } else {
         m.setLatLng([c.coordinates.lat, c.coordinates.lng]);
-        m.setIcon(pinIcon(COLORS[c.floodStatus]));
+        m.setIcon(pinIcon(L, COLORS[c.floodStatus]));
       }
       m.bindPopup(popup);
     });
-  }, [cameras, onSelect]);
+  }, [cameras, onSelect, ready]);
 
   return (
     <div

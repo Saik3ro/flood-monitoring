@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Save, ShieldAlert } from "lucide-react";
-import { store, useStore, useCurrentUser } from "@/lib/subay/store";
+import { useStore } from "@/lib/subay/store";
+import { useAuth } from "@/context/AuthContext.jsx";
 import type { Camera } from "@/lib/subay/types";
 import { toast } from "sonner";
 
@@ -16,16 +17,16 @@ export const Route = createFileRoute("/_auth/config")({
 });
 
 function ConfigPage() {
-  const user = useCurrentUser();
+  const { isAdmin } = useAuth();
   const cameras = useStore((s) => s.cameras);
   const navigate = useNavigate();
   const [activeId, setActiveId] = useState(cameras[0]?.id ?? "");
 
   useEffect(() => {
-    if (user && user.role !== "admin") navigate({ to: "/" });
-  }, [user, navigate]);
+    if (isAdmin === false) navigate({ to: "/" });
+  }, [isAdmin, navigate]);
 
-  if (user && user.role !== "admin") {
+  if (isAdmin === false) {
     return (
       <div className="rounded-xl border border-border bg-card p-8 text-center">
         <ShieldAlert className="mx-auto h-8 w-8 text-muted-foreground" />

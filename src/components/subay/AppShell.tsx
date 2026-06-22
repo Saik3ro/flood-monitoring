@@ -1,19 +1,23 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { LogOut, LayoutDashboard, Settings, Users, Waves } from "lucide-react";
-import { useCurrentUser, store } from "@/lib/subay/store";
+import { useAuth } from "@/context/AuthContext.jsx";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const user = useCurrentUser();
+  const { user, isAdmin, logout } = useAuth();
+  const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const isAdmin = user?.role === "admin";
 
   const nav = [
     { to: "/", label: "Dashboard", icon: LayoutDashboard, show: true },
     { to: "/config", label: "Camera Config", icon: Settings, show: isAdmin },
     { to: "/users", label: "User Access", icon: Users, show: isAdmin },
   ];
+
+  const handleAvatarClick = () => {
+    navigate({ to: "/profile" });
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -60,18 +64,29 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <div className="hidden text-right sm:block">
                   <div className="text-sm font-medium leading-tight">{user.name}</div>
                   <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                    {user.role}
+                    {isAdmin ? "Admin" : "User"}
                   </div>
                 </div>
-                <div className="grid h-9 w-9 place-items-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">
-                  {user.name
-                    .split(" ")
-                    .map((p) => p[0])
-                    .join("")
-                    .slice(0, 2)}
-                </div>
                 <button
-                  onClick={() => store.signOut()}
+                  onClick={handleAvatarClick}
+                  className="relative h-9 w-9 rounded-full overflow-hidden border-2 border-transparent hover:border-primary hover:shadow-lg hover:scale-110 transition-all cursor-pointer"
+                  title="View Profile"
+                  aria-label="View Profile"
+                >
+                  {user.photoURL ? (
+                    <img src={user.photoURL} alt={user.name} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="h-full w-full flex items-center justify-center bg-accent text-sm font-semibold text-accent-foreground">
+                      {user.name
+                        .split(" ")
+                        .map((p) => p[0])
+                        .join("")
+                        .slice(0, 2)}
+                    </div>
+                  )}
+                </button>
+                <button
+                  onClick={logout}
                   className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
                   aria-label="Sign out"
                 >

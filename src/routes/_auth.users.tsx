@@ -58,7 +58,7 @@ function UsersPage() {
       <header>
         <h1 className="text-2xl font-bold tracking-tight">User Access</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Add Gmail accounts and assign roles. Sign-in is restricted to listed users.
+          Manage authenticated Google accounts and assign roles. The list is populated from the current signed-in users.
         </p>
       </header>
 

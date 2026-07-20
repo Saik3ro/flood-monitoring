@@ -17,20 +17,73 @@ export const Route = createFileRoute("/_auth/")({
 });
 
 function Dashboard() {
-  const cameras = useStore((s) => s.cameras);
-  const [activeId, setActiveId] = useState<string>(cameras[0]?.id ?? "");
+  const persistedCameras = useStore((s) => s.cameras);
+  const [liveCameras, setLiveCameras] = useState<typeof persistedCameras>(persistedCameras);
+  const [dbStatus, setDbStatus] = useState<"connecting" | "connected" | "error">("connecting");
+  const [dbError, setDbError] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string>(persistedCameras[0]?.id ?? "");
   const [lastUpdate, setLastUpdate] = useState(() => new Date());
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  // Simulated MongoDB polling: refresh flood data every 7s.
   useEffect(() => {
-    const id = setInterval(() => {
-      store.tickFloodData();
-      setLastUpdate(new Date());
-    }, 7000);
-    return () => clearInterval(id);
-  }, []);
+    setLiveCameras(persistedCameras);
+  }, [persistedCameras]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    function applyDbFeeds(baseCameras: typeof persistedCameras, dbCameras: typeof persistedCameras) {
+      const updated = [...baseCameras];
+
+      dbCameras.forEach((doc) => {
+        const targetId = "cam_002";
+        const targetIndex = updated.findIndex((camera) => camera.id === targetId);
+
+        if (targetIndex !== -1) {
+          updated[targetIndex] = {
+            ...updated[targetIndex],
+            coordinates: doc.coordinates,
+            waterLevel: doc.waterLevel,
+            floodStatus: doc.floodStatus,
+            timestamp: doc.timestamp,
+            location: updated[targetIndex].location,
+          };
+        }
+      });
+
+      return updated;
+    }
+
+    async function refreshCameras() {
+      try {
+        const resp = await fetch("/api/cameras");
+        if (!resp.ok) {
+          throw new Error(`API returned ${resp.status}`);
+        }
+        const data = await resp.json();
+        if (!isMounted) return;
+
+        const merged = applyDbFeeds(persistedCameras, data);
+        setLiveCameras(merged);
+        store.syncCameras(merged);
+        setDbStatus("connected");
+        setDbError(null);
+        setLastUpdate(new Date());
+      } catch (error) {
+        if (!isMounted) return;
+        setDbStatus("error");
+        setDbError(error instanceof Error ? error.message : String(error));
+      }
+    }
+
+    refreshCameras();
+    const id = setInterval(refreshCameras, 7000);
+    return () => {
+      isMounted = false;
+      clearInterval(id);
+    };
+  }, [persistedCameras]);
+
+  const cameras = liveCameras;
   const active = cameras.find((c) => c.id === activeId) ?? cameras[0];
   const counts = {
     NORMAL: cameras.filter((c) => c.floodStatus === "NORMAL").length,
@@ -48,7 +101,11 @@ function Dashboard() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Live Flood Watch</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Auto-refreshing every 7s · {cameras.length} cameras online
+            {dbStatus === "connected"
+              ? `Connected to MongoDB · ${cameras.length} cameras online`
+              : dbStatus === "connecting"
+              ? "Connecting to MongoDB..."
+              : "MongoDB connection failed"}
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -56,6 +113,11 @@ function Dashboard() {
           Last update {lastUpdate.toLocaleTimeString()}
         </div>
       </div>
+      {dbError ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          MongoDB error: {dbError}
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard label="Cameras" value={String(cameras.length)} accent="primary" />

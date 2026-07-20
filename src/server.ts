@@ -2,6 +2,7 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
+import { getCameraFeeds, updateCameraFeed } from "./lib/db.server";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -40,6 +41,43 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      const url = new URL(request.url);
+
+      if (url.pathname === "/api/cameras") {
+        if (request.method === "GET") {
+          const feeds = await getCameraFeeds();
+          return new Response(JSON.stringify(feeds), {
+            headers: { "content-type": "application/json; charset=utf-8" },
+          });
+        }
+      }
+
+      if (url.pathname.startsWith("/api/cameras/")) {
+        const cameraId = decodeURIComponent(url.pathname.split("/api/cameras/")[1] ?? "");
+        if (request.method === "PATCH") {
+          try {
+            const body = await request.json();
+            const camera = body?.camera;
+            if (!camera || typeof camera !== "object") {
+              return new Response(JSON.stringify({ error: "Invalid camera payload" }), {
+                status: 400,
+                headers: { "content-type": "application/json; charset=utf-8" },
+              });
+            }
+
+            const saved = await updateCameraFeed(cameraId, camera);
+            return new Response(JSON.stringify(saved), {
+              headers: { "content-type": "application/json; charset=utf-8" },
+            });
+          } catch (error) {
+            return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Update failed" }), {
+              status: 500,
+              headers: { "content-type": "application/json; charset=utf-8" },
+            });
+          }
+        }
+      }
+
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);

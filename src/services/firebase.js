@@ -19,10 +19,20 @@ const firebaseConfig = {
 const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: "select_account" });
 
 async function loginWithGoogle() {
-  const result = await signInWithPopup(auth, googleProvider);
-  return result.user;
+  try {
+    // Debug output to inspect effective firebaseConfig at runtime
+    // eslint-disable-next-line no-console
+    console.log('[firebase] firebaseConfig:', firebaseConfig);
+    const result = await signInWithPopup(auth, googleProvider);
+    return result.user;
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[firebase] loginWithGoogle error:', err);
+    throw err;
+  }
 }
 
 async function logout() {
@@ -58,6 +68,7 @@ async function isAdmin() {
 export {
   auth,
   googleProvider,
+  firebaseConfig,
   loginWithGoogle,
   logout,
   getCurrentUser,

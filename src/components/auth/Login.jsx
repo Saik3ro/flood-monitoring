@@ -34,7 +34,14 @@ export default function LoginPage() {
       navigate({ to: "/" });
     } catch (err) {
       console.error(err);
-      setError("Google sign-in failed. Please try again.");
+      const message = err?.code === "auth/unauthorized-domain"
+        ? "Google sign-in is blocked for this domain. Please authorize localhost in your Firebase Authentication settings and try again."
+        : err?.code === "auth/operation-not-allowed"
+          ? "Google sign-in is not enabled for this Firebase project. Enable it in Firebase Authentication and try again."
+          : err?.code === "auth/popup-blocked"
+            ? "The sign-in popup was blocked. Please allow pop-ups for this site and try again."
+            : "Google sign-in failed. Please try again.";
+      setError(message);
     } finally {
       setSigningIn(false);
     }

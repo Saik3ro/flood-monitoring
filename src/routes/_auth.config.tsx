@@ -72,9 +72,26 @@ function ConfigPage() {
 function CameraEditor({ camera }: { camera: Camera }) {
   const [draft, setDraft] = useState<Camera>(camera);
 
-  function save() {
+  async function save() {
     store.updateCamera(camera.id, draft);
-    toast.success("Camera configuration saved", { description: draft.location });
+
+    try {
+      const response = await fetch(`/api/cameras/${encodeURIComponent(camera.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ camera: draft }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}`);
+      }
+
+      toast.success("Camera configuration saved", { description: draft.location });
+    } catch (error) {
+      toast.error("Camera configuration could not be synced to MongoDB", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   return (

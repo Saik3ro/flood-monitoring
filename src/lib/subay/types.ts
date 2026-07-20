@@ -26,6 +26,7 @@ export interface User {
   email: string;
   role: Role;
   avatarUrl?: string;
+  photoURL?: string;
   addedAt: string;
 }
 

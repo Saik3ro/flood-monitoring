@@ -3,6 +3,13 @@ import "./lib/error-capture";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { getCameraFeeds, updateCameraFeed } from "./lib/db.server";
+import {
+  fetchCameraSnapshot,
+  CameraAuthError,
+  CameraTimeoutError,
+  CameraUnreachableError,
+  CameraResponseError,
+} from "./lib/camera-stream.server.ts";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -53,8 +60,76 @@ export default {
       }
 
       if (url.pathname.startsWith("/api/cameras/")) {
-        const cameraId = decodeURIComponent(url.pathname.split("/api/cameras/")[1] ?? "");
-        if (request.method === "PATCH") {
+        const route = url.pathname.slice("/api/cameras/".length);
+        const [cameraId, ...rest] = route.split("/");
+        const subPath = rest.join("/");
+
+        if (subPath === "snapshot/test" && request.method === "POST") {
+          try {
+            const streamConfig = await request.json();
+            if (!streamConfig || typeof streamConfig !== "object") {
+              return new Response(JSON.stringify({ error: "Invalid stream configuration" }), {
+                status: 400,
+                headers: { "content-type": "application/json; charset=utf-8" },
+              });
+            }
+
+            const result = await fetchCameraSnapshot(streamConfig);
+            return new Response(result.buffer, {
+              headers: {
+                "content-type": result.contentType,
+                "cache-control": "no-store",
+              },
+            });
+          } catch (error) {
+            let status = 500;
+            let message = error instanceof Error ? error.message : "Snapshot fetch failed";
+            if (error instanceof CameraTimeoutError) status = 504;
+            else if (error instanceof CameraAuthError) status = 401;
+            else if (error instanceof CameraUnreachableError) status = 502;
+            else if (error instanceof CameraResponseError) status = 502;
+
+            return new Response(JSON.stringify({ error: message }), {
+              status,
+              headers: { "content-type": "application/json; charset=utf-8" },
+            });
+          }
+        }
+
+        if (subPath === "snapshot" && request.method === "GET") {
+          try {
+            const feeds = await getCameraFeeds();
+            const camera = feeds.find((entry) => entry.id === cameraId);
+            if (!camera || !camera.streamConfig?.ipAddress) {
+              return new Response(JSON.stringify({ error: "Snapshot source not configured" }), {
+                status: 404,
+                headers: { "content-type": "application/json; charset=utf-8" },
+              });
+            }
+
+            const result = await fetchCameraSnapshot(camera.streamConfig);
+            return new Response(result.buffer, {
+              headers: {
+                "content-type": result.contentType,
+                "cache-control": "no-store",
+              },
+            });
+          } catch (error) {
+            let status = 500;
+            let message = error instanceof Error ? error.message : "Snapshot proxy failed";
+            if (error instanceof CameraTimeoutError) status = 504;
+            else if (error instanceof CameraAuthError) status = 401;
+            else if (error instanceof CameraUnreachableError) status = 502;
+            else if (error instanceof CameraResponseError) status = 502;
+
+            return new Response(JSON.stringify({ error: message }), {
+              status,
+              headers: { "content-type": "application/json; charset=utf-8" },
+            });
+          }
+        }
+
+        if (rest.length === 0 && request.method === "PATCH") {
           try {
             const body = await request.json();
             const camera = body?.camera;

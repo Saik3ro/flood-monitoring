@@ -26,6 +26,13 @@ type RawCameraDoc = {
   water_level?: number;
   location?: { type: string; coordinates: [number, number] } | string;
   timestamp?: string;
+  stream_config?: {
+    ipAddress: string;
+    port?: number;
+    username?: string;
+    password?: string;
+    snapshotPath?: string;
+  };
 };
 
 function normalizeFloodStatus(status: string | undefined, waterLevel: number): FloodStatus {
@@ -63,6 +70,7 @@ function mapCamera(doc: RawCameraDoc, index: number): Camera {
     floodStatus: normalizeFloodStatus(doc.status, waterLevel),
     timestamp: doc.timestamp ?? new Date().toISOString(),
     snapshotUrl: `https://picsum.photos/seed/${doc._id.toString().slice(-8)}/640/400`,
+    streamConfig: doc.stream_config ?? undefined,
     roiConfig: { x: 110, y: 180, width: 320, height: 380 },
     hsvThresholds: { h_min: 0, h_max: 30, s_min: 50, s_max: 255, v_min: 40, v_max: 255 },
   };
@@ -119,21 +127,27 @@ export async function updateCameraFeed(id: string, camera: Camera): Promise<Came
   const db = client.db(MONGODB_DB);
   const collection = db.collection<RawCameraDoc>(MONGODB_COLLECTION);
 
+  const setPayload: Record<string, unknown> = {
+    location: camera.location,
+    water_level: camera.waterLevel,
+    status: camera.floodStatus,
+    timestamp: camera.timestamp,
+    coordinates: {
+      type: "Point",
+      coordinates: [camera.coordinates.lng, camera.coordinates.lat],
+    },
+    roi_config: camera.roiConfig,
+    hsv_thresholds: camera.hsvThresholds,
+  };
+
+  if (camera.streamConfig !== undefined) {
+    setPayload.stream_config = camera.streamConfig;
+  }
+
   const result = await collection.updateOne(
     { _id: parseDocumentId(id) },
     {
-      $set: {
-        location: camera.location,
-        water_level: camera.waterLevel,
-        status: camera.floodStatus,
-        timestamp: camera.timestamp,
-        coordinates: {
-          type: "Point",
-          coordinates: [camera.coordinates.lng, camera.coordinates.lat],
-        },
-        roi_config: camera.roiConfig,
-        hsv_thresholds: camera.hsvThresholds,
-      },
+      $set: setPayload,
     },
     { upsert: true },
   );

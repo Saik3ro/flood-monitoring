@@ -1,6 +1,14 @@
 export type Role = "admin" | "authority" | "viewer";
 export type FloodStatus = "NORMAL" | "ALERT" | "DANGER";
 
+export interface StreamConfig {
+  ipAddress: string;
+  port?: number;
+  username?: string;
+  password?: string;
+  snapshotPath?: string;
+}
+
 export interface Camera {
   id: string;
   location: string;
@@ -9,6 +17,7 @@ export interface Camera {
   floodStatus: FloodStatus;
   timestamp: string;
   snapshotUrl: string;
+  streamConfig?: StreamConfig;
   roiConfig: { x: number; y: number; width: number; height: number };
   hsvThresholds: {
     h_min: number;

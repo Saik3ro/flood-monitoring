@@ -90,6 +90,7 @@ function Dashboard() {
     ALERT: cameras.filter((c) => c.floodStatus === "ALERT").length,
     DANGER: cameras.filter((c) => c.floodStatus === "DANGER").length,
   };
+  const snapshotReloadToken = lastUpdate.getTime();
 
   function scroll(dir: -1 | 1) {
     scrollRef.current?.scrollBy({ left: dir * 360, behavior: "smooth" });
@@ -169,9 +170,15 @@ function Dashboard() {
               >
                 <div className="relative aspect-video w-full overflow-hidden bg-muted">
                   <img
-                    src={c.snapshotUrl}
+                    src={c.streamConfig?.ipAddress ? `/api/cameras/${encodeURIComponent(c.id)}/snapshot?ts=${snapshotReloadToken}` : c.snapshotUrl}
                     alt={c.location}
                     className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                    onError={(event) => {
+                      const img = event.currentTarget;
+                      if (img.src.includes(`/api/cameras/${encodeURIComponent(c.id)}/snapshot`)) {
+                        img.src = c.snapshotUrl;
+                      }
+                    }}
                   />
                   <div className="absolute left-3 top-3">
                     <StatusBadge status={c.floodStatus} />
@@ -201,7 +208,17 @@ function Dashboard() {
         {active && (
           <div className="lg:col-span-3 overflow-hidden rounded-2xl border border-border bg-card">
             <div className="relative aspect-video w-full overflow-hidden bg-muted">
-              <img src={active.snapshotUrl} alt={active.location} className="h-full w-full object-cover" />
+              <img
+                src={active.streamConfig?.ipAddress ? `/api/cameras/${encodeURIComponent(active.id)}/snapshot?ts=${snapshotReloadToken}` : active.snapshotUrl}
+                alt={active.location}
+                className="h-full w-full object-cover"
+                onError={(event) => {
+                  const img = event.currentTarget;
+                  if (img.src.includes(`/api/cameras/${encodeURIComponent(active.id)}/snapshot`)) {
+                    img.src = active.snapshotUrl;
+                  }
+                }}
+              />
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-4">
                 <div className="flex items-center justify-between gap-3 text-white">
                   <div>

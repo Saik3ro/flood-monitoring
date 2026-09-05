@@ -1,0 +1,15 @@
+{
+  "camera_id": "6a9ba725e7711ec3a68b06d8",
+  "timestamp": "20260905T065417873911Z",
+  "tcapture_ms": 273.617,
+  "tprocessing_ms": 17.574,
+  "thsv_classification_ms": 10.544,
+  "tkalman_ms": 1.757,
+  "tdb_write_ms": 108.499,
+  "tsync_ms": 0.0,
+  "troute_ms": 0.0,
+  "Tresponse_ms": 399.772,
+  "pixel_detection_accuracy": 1.0,
+  "classification_accuracy": 0.782,
+  "processed_image_path": "D:\\KINGKING DOWNLOADS\\Thesis\\s\\flood-monitoring-fd7723de6b3f2667b7b66860bd433e575bd7ce96\\flood-monitoring-fd7723de6b3f2667b7b66860bd433e575bd7ce96\\paper_results\\images\\6a9ba725e7711ec3a68b06d8_20260905T065417873911Z.png"
+}

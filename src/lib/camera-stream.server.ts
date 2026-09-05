@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import type { StreamConfig } from "./subay/types";
+import type { StreamConfig } from "./floodsight/types";
 
 export class CameraUnreachableError extends Error {}
 export class CameraAuthError extends Error {}

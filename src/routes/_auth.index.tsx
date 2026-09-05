@@ -1,89 +1,27 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
-import { Camera as CameraIcon, MapPin, Clock, Droplets, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
-import { CameraMap } from "@/components/subay/CameraMap";
-import { StatusBadge } from "@/components/subay/StatusBadge";
-import { store, useStore } from "@/lib/subay/store";
+import { useRef, useState } from "react";
+import { Camera as CameraIcon, MapPin, Clock, Droplets, ChevronLeft, ChevronRight, RefreshCw, Bell } from "lucide-react";
+import { StatusBadge } from "@/components/floodsight/StatusBadge";
+import { NotificationSidebar, NotificationSheet } from "@/components/floodsight/NotificationSidebar";
+import { useLiveCameras } from "@/lib/floodsight/useLiveCameras";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_auth/")({
   head: () => ({
     meta: [
-      { title: "Dashboard · SUBAY Flood Watch" },
-      { name: "description", content: "Live CCTV flood status across Cagayan de Oro City." },
+      { title: "Dashboard · FloodSight" },
+      { name: "description", content: "Live CCTV flood status and route guidance across Cagayan de Oro City." },
     ],
   }),
   component: Dashboard,
 });
 
 function Dashboard() {
-  const persistedCameras = useStore((s) => s.cameras);
-  const [liveCameras, setLiveCameras] = useState<typeof persistedCameras>(persistedCameras);
-  const [dbStatus, setDbStatus] = useState<"connecting" | "connected" | "error">("connecting");
-  const [dbError, setDbError] = useState<string | null>(null);
-  const [activeId, setActiveId] = useState<string>(persistedCameras[0]?.id ?? "");
-  const [lastUpdate, setLastUpdate] = useState(() => new Date());
+  const { cameras, dbStatus, dbError, lastUpdate } = useLiveCameras();
+  const [activeId, setActiveId] = useState<string>("");
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    setLiveCameras(persistedCameras);
-  }, [persistedCameras]);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    function applyDbFeeds(baseCameras: typeof persistedCameras, dbCameras: typeof persistedCameras) {
-      const updated = [...baseCameras];
-
-      dbCameras.forEach((doc) => {
-        const targetId = "cam_002";
-        const targetIndex = updated.findIndex((camera) => camera.id === targetId);
-
-        if (targetIndex !== -1) {
-          updated[targetIndex] = {
-            ...updated[targetIndex],
-            coordinates: doc.coordinates,
-            waterLevel: doc.waterLevel,
-            floodStatus: doc.floodStatus,
-            timestamp: doc.timestamp,
-            location: updated[targetIndex].location,
-          };
-        }
-      });
-
-      return updated;
-    }
-
-    async function refreshCameras() {
-      try {
-        const resp = await fetch("/api/cameras");
-        if (!resp.ok) {
-          throw new Error(`API returned ${resp.status}`);
-        }
-        const data = await resp.json();
-        if (!isMounted) return;
-
-        const merged = applyDbFeeds(persistedCameras, data);
-        setLiveCameras(merged);
-        store.syncCameras(merged);
-        setDbStatus("connected");
-        setDbError(null);
-        setLastUpdate(new Date());
-      } catch (error) {
-        if (!isMounted) return;
-        setDbStatus("error");
-        setDbError(error instanceof Error ? error.message : String(error));
-      }
-    }
-
-    refreshCameras();
-    const id = setInterval(refreshCameras, 7000);
-    return () => {
-      isMounted = false;
-      clearInterval(id);
-    };
-  }, [persistedCameras]);
-
-  const cameras = liveCameras;
   const active = cameras.find((c) => c.id === activeId) ?? cameras[0];
   const counts = {
     NORMAL: cameras.filter((c) => c.floodStatus === "NORMAL").length,
@@ -97,7 +35,8 @@ function Dashboard() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+      <div className="min-w-0 flex-1 space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Live Flood Watch</h1>
@@ -109,9 +48,18 @@ function Dashboard() {
               : "MongoDB connection failed"}
           </p>
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <RefreshCw className="h-3.5 w-3.5 animate-spin [animation-duration:6s]" />
-          Last update {lastUpdate.toLocaleTimeString()}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <RefreshCw className="h-3.5 w-3.5 animate-spin [animation-duration:6s]" />
+            Last update {lastUpdate.toLocaleTimeString()}
+          </div>
+          <button
+            onClick={() => setNotificationsOpen(true)}
+            className="rounded-md border border-border bg-card p-2 text-muted-foreground hover:bg-accent hover:text-foreground lg:hidden"
+            aria-label="Open notifications"
+          >
+            <Bell className="h-4 w-4" />
+          </button>
         </div>
       </div>
       {dbError ? (
@@ -203,10 +151,10 @@ function Dashboard() {
         </div>
       </section>
 
-      {/* Active detail + map */}
-      <section className="grid gap-6 lg:grid-cols-5">
+      {/* Active detail */}
+      <section>
         {active && (
-          <div className="lg:col-span-3 overflow-hidden rounded-2xl border border-border bg-card">
+          <div className="overflow-hidden rounded-2xl border border-border bg-card">
             <div className="relative aspect-video w-full overflow-hidden bg-muted">
               <img
                 src={active.streamConfig?.ipAddress ? `/api/cameras/${encodeURIComponent(active.id)}/snapshot?ts=${snapshotReloadToken}` : active.snapshotUrl}
@@ -253,21 +201,11 @@ function Dashboard() {
             </div>
           </div>
         )}
-
-        <div className="lg:col-span-2 space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-              Map overview
-            </h2>
-            <div className="flex gap-3 text-[11px]">
-              <Legend color="#22c55e" label="Normal" />
-              <Legend color="#f59e0b" label="Alert" />
-              <Legend color="#ef4444" label="Danger" />
-            </div>
-          </div>
-          <CameraMap cameras={cameras} onSelect={setActiveId} height={420} />
-        </div>
       </section>
+      </div>
+
+      <NotificationSidebar cameras={cameras} className="hidden lg:sticky lg:top-20 lg:block" />
+      <NotificationSheet cameras={cameras} open={notificationsOpen} onOpenChange={setNotificationsOpen} />
     </div>
   );
 }
@@ -307,14 +245,5 @@ function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; 
       </div>
       <div className="mt-1 text-sm font-semibold tabular-nums">{value}</div>
     </div>
-  );
-}
-
-function Legend({ color, label }: { color: string; label: string }) {
-  return (
-    <span className="inline-flex items-center gap-1 text-muted-foreground">
-      <span className="h-2 w-2 rounded-full" style={{ background: color }} />
-      {label}
-    </span>
   );
 }

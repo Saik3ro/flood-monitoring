@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { AppShell } from "@/components/subay/AppShell";
+import { AppShell } from "@/components/floodsight/AppShell";
 import { useAuth } from "@/context/AuthContext.jsx";
 import PrivateRoute from "@/components/auth/PrivateRoute.jsx";
 

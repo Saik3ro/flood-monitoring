@@ -14,6 +14,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as AuthIndexRouteImport } from './routes/_auth.index'
 import { Route as AuthUsersRouteImport } from './routes/_auth.users'
+import { Route as AuthMapViewRouteImport } from './routes/_auth.map-view'
 import { Route as AuthConfigRouteImport } from './routes/_auth.config'
 
 const ProfileRoute = ProfileRouteImport.update({
@@ -40,6 +41,11 @@ const AuthUsersRoute = AuthUsersRouteImport.update({
   path: '/users',
   getParentRoute: () => AuthRoute,
 } as any)
+const AuthMapViewRoute = AuthMapViewRouteImport.update({
+  id: '/map-view',
+  path: '/map-view',
+  getParentRoute: () => AuthRoute,
+} as any)
 const AuthConfigRoute = AuthConfigRouteImport.update({
   id: '/config',
   path: '/config',
@@ -51,12 +57,14 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
   '/config': typeof AuthConfigRoute
+  '/map-view': typeof AuthMapViewRoute
   '/users': typeof AuthUsersRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
   '/config': typeof AuthConfigRoute
+  '/map-view': typeof AuthMapViewRoute
   '/users': typeof AuthUsersRoute
   '/': typeof AuthIndexRoute
 }
@@ -66,20 +74,22 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
   '/_auth/config': typeof AuthConfigRoute
+  '/_auth/map-view': typeof AuthMapViewRoute
   '/_auth/users': typeof AuthUsersRoute
   '/_auth/': typeof AuthIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/profile' | '/config' | '/users'
+  fullPaths: '/' | '/login' | '/profile' | '/config' | '/map-view' | '/users'
   fileRoutesByTo: FileRoutesByTo
-  to: '/login' | '/profile' | '/config' | '/users' | '/'
+  to: '/login' | '/profile' | '/config' | '/map-view' | '/users' | '/'
   id:
     | '__root__'
     | '/_auth'
     | '/login'
     | '/profile'
     | '/_auth/config'
+    | '/_auth/map-view'
     | '/_auth/users'
     | '/_auth/'
   fileRoutesById: FileRoutesById
@@ -127,6 +137,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthUsersRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/_auth/map-view': {
+      id: '/_auth/map-view'
+      path: '/map-view'
+      fullPath: '/map-view'
+      preLoaderRoute: typeof AuthMapViewRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/config': {
       id: '/_auth/config'
       path: '/config'
@@ -139,12 +156,14 @@ declare module '@tanstack/react-router' {
 
 interface AuthRouteChildren {
   AuthConfigRoute: typeof AuthConfigRoute
+  AuthMapViewRoute: typeof AuthMapViewRoute
   AuthUsersRoute: typeof AuthUsersRoute
   AuthIndexRoute: typeof AuthIndexRoute
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
   AuthConfigRoute: AuthConfigRoute,
+  AuthMapViewRoute: AuthMapViewRoute,
   AuthUsersRoute: AuthUsersRoute,
   AuthIndexRoute: AuthIndexRoute,
 }

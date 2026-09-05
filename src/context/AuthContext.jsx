@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, googleProvider, loginWithGoogle as serviceLoginWithGoogle } from "../services/firebase.js";
 import { signOut } from "firebase/auth";
-import { store } from "../lib/subay/store";
+import { store } from "../lib/floodsight/store";
 
 const ADMIN_EMAIL = "langgamen.carlsyker@gmail.com";
 
@@ -86,7 +86,7 @@ export function AuthProvider({ children }) {
     const isDev = typeof import.meta !== "undefined" && import.meta.env && import.meta.env.DEV;
     if (isDev) {
       try {
-        const raw = localStorage.getItem("subay-state-v1");
+        const raw = localStorage.getItem("floodsight-state-v1");
         if (raw) {
           const s = JSON.parse(raw);
           if (s.currentUserId) {
@@ -154,7 +154,7 @@ export function AuthProvider({ children }) {
   const setAdminMode = (enabled) => {
     setAdminModeState(Boolean(enabled));
     if (typeof window !== "undefined") {
-      window.localStorage.setItem("subay_admin_mode", String(Boolean(enabled)));
+      window.localStorage.setItem("floodsight_admin_mode", String(Boolean(enabled)));
     }
     updateAuthValue({ adminMode: Boolean(enabled) });
   };

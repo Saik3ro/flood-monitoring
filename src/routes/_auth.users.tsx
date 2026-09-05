@@ -1,16 +1,16 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Plus, Trash2, ShieldAlert } from "lucide-react";
-import { store, useStore } from "@/lib/subay/store";
+import { store, useStore } from "@/lib/floodsight/store";
 import { useAuth } from "@/context/AuthContext.jsx";
-import type { Role } from "@/lib/subay/types";
+import type { Role } from "@/lib/floodsight/types";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_auth/users")({
   head: () => ({
     meta: [
-      { title: "User Access · SUBAY" },
-      { name: "description", content: "Manage SUBAY dashboard users and roles." },
+      { title: "User Access · FloodSight" },
+      { name: "description", content: "Manage FloodSight dashboard users and roles." },
     ],
   }),
   component: UsersPage,

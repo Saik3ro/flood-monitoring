@@ -1,34 +1,23 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Save, ShieldAlert } from "lucide-react";
-import { store, useStore } from "@/lib/subay/store";
+import { Plus, Save, Search, ShieldAlert } from "lucide-react";
+import { store, useStore } from "@/lib/floodsight/store";
 import { useAuth } from "@/context/AuthContext.jsx";
-import type { Camera } from "@/lib/subay/types";
+import type { Camera, FloodStatus } from "@/lib/floodsight/types";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-const OPENCV_HSV_RANGES = [
-  {
-    name: "Green",
-    ranges: [{ label: "Green range", lower: [35, 70, 70], upper: [85, 255, 255] }],
-  },
-  {
-    name: "Orange",
-    ranges: [{ label: "Orange range", lower: [11, 100, 100], upper: [25, 255, 255] }],
-  },
-  {
-    name: "Red",
-    ranges: [
-      { label: "Red range 1", lower: [0, 100, 100], upper: [10, 255, 255] },
-      { label: "Red range 2", lower: [170, 100, 100], upper: [180, 255, 255] },
-    ],
-  },
-];
+const STATUS_DOT: Record<FloodStatus, string> = {
+  NORMAL: "var(--color-status-normal)",
+  ALERT: "var(--color-status-alert)",
+  DANGER: "var(--color-status-danger)",
+};
 
 export const Route = createFileRoute("/_auth/config")({
   head: () => ({
     meta: [
-      { title: "Camera Configuration · SUBAY" },
-      { name: "description", content: "Configure CCTV ROI and HSV thresholds." },
+      { title: "Camera Configuration · FloodSight" },
+      { name: "description", content: "Configure CCTV ROI for FloodSight." },
     ],
   }),
   component: ConfigPage,
@@ -39,6 +28,7 @@ function ConfigPage() {
   const cameras = useStore((s) => s.cameras);
   const navigate = useNavigate();
   const [activeId, setActiveId] = useState(cameras[0]?.id ?? "");
+  const [filter, setFilter] = useState("");
 
   useEffect(() => {
     if (isAdmin === false) navigate({ to: "/" });
@@ -56,38 +46,75 @@ function ConfigPage() {
   const active = cameras.find((c) => c.id === activeId) ?? cameras[0];
   if (!active) return null;
 
+  const numbered = cameras.map((c, i) => ({ ...c, displayNumber: i + 1 }));
+  const filtered = filter.trim()
+    ? numbered.filter((c) => c.location.toLowerCase().includes(filter.trim().toLowerCase()))
+    : numbered;
+
   return (
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-bold tracking-tight">Camera Configuration</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Tune Region of Interest and HSV thresholds for water-marker detection.
+          Tune the Region of Interest for water-marker detection.
         </p>
       </header>
 
-      <div className="flex flex-wrap gap-2">
-        {cameras.map((c) => (
-          <button
-            key={c.id}
-            onClick={() => setActiveId(c.id)}
-            className={
-              "rounded-full border px-3 py-1.5 text-sm transition-colors " +
-              (c.id === activeId
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-border bg-card hover:bg-accent")
-            }
-          >
-            {c.location}
-          </button>
-        ))}
+      <div className="space-y-3 rounded-2xl border border-border bg-card p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Cameras <span className="text-muted-foreground/70">({cameras.length})</span>
+          </h2>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder="Filter cameras…"
+              className="input w-48 pl-8 text-xs"
+            />
+          </div>
+        </div>
+
+        {filtered.length > 0 ? (
+          <div className="grid grid-cols-8 gap-1.5 sm:grid-cols-10 md:grid-cols-12 lg:grid-cols-[repeat(16,minmax(0,1fr))]">
+            {filtered.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => setActiveId(c.id)}
+                title={c.location}
+                className={cn(
+                  "flex flex-col items-center gap-1 rounded-lg border px-1.5 py-2 text-xs font-medium transition-colors",
+                  c.id === activeId
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-background hover:bg-accent",
+                )}
+              >
+                <span
+                  className="h-1.5 w-1.5 rounded-full"
+                  style={{ backgroundColor: STATUS_DOT[c.floodStatus] }}
+                />
+                {c.displayNumber}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="py-3 text-center text-xs text-muted-foreground">
+            No cameras match “{filter}”.
+          </p>
+        )}
+
+        <p className="truncate text-xs text-muted-foreground">
+          Selected: <span className="font-medium text-foreground">{active.location}</span>
+        </p>
       </div>
 
-      <CameraEditor key={active.id} camera={active} />
+      <CameraEditor key={active.id} camera={active} onCreated={(created) => setActiveId(created.id)} />
     </div>
   );
 }
 
-function CameraEditor({ camera }: { camera: Camera }) {
+function CameraEditor({ camera, onCreated }: { camera: Camera; onCreated?: (camera: Camera) => void }) {
   const [draft, setDraft] = useState<Camera>(camera);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isFetchingSnapshot, setIsFetchingSnapshot] = useState(false);
@@ -289,6 +316,29 @@ function CameraEditor({ camera }: { camera: Camera }) {
     }
   }
 
+  async function saveAsNew() {
+    try {
+      const response = await fetch(`/api/cameras`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ camera: draft }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}`);
+      }
+
+      const created: Camera = await response.json();
+      store.addCamera(created);
+      toast.success("New camera added", { description: created.location });
+      onCreated?.(created);
+    } catch (error) {
+      toast.error("Could not add new camera to MongoDB", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   return (
     <div className="grid gap-6 lg:grid-cols-5">
       <div className="lg:col-span-3 overflow-hidden rounded-2xl border border-border bg-card">
@@ -377,7 +427,7 @@ function CameraEditor({ camera }: { camera: Camera }) {
         ) : null}
       </div>
 
-      <div className="lg:col-span-2 space-y-5 rounded-2xl border border-border bg-card p-5">
+      <div className="lg:col-span-2 lg:self-start space-y-5 rounded-2xl border border-border bg-card p-5">
         <Field label="Location name">
           <input
             value={draft.location}
@@ -514,50 +564,23 @@ function CameraEditor({ camera }: { camera: Camera }) {
           </p>
         </Section>
 
-        <Section title="HSV Thresholds">
-          <div className="space-y-4">
-            {OPENCV_HSV_RANGES.map((color) => (
-              <div key={color.name} className="rounded-2xl border border-border bg-muted p-4">
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <span className="text-sm font-semibold">{color.name}</span>
-                  <span className="rounded-full bg-muted px-2 py-1 text-[11px] uppercase tracking-wide text-muted-foreground">
-                    OpenCV fixed thresholds
-                  </span>
-                </div>
-                <div className="space-y-3">
-                  {color.ranges.map((range) => (
-                    <div key={range.label} className="grid gap-2 sm:grid-cols-2">
-                      <div>
-                        <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                          {range.label}
-                        </div>
-                        <div className="rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm">
-                          Lower: [{range.lower.join(", ")}]
-                        </div>
-                      </div>
-                      <div>
-                        <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                          &nbsp;
-                        </div>
-                        <div className="rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm">
-                          Upper: [{range.upper.join(", ")}]
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </Section>
-
-        <button
-          onClick={save}
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
-        >
-          <Save className="h-4 w-4" />
-          Save configuration
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={save}
+            className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            <Save className="h-4 w-4" />
+            Save configuration
+          </button>
+          <button
+            onClick={saveAsNew}
+            title="Add the current settings as a brand new camera instead of overwriting this one"
+            className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-primary/40 bg-card px-4 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-accent"
+          >
+            <Plus className="h-4 w-4" />
+            Save as new camera
+          </button>
+        </div>
       </div>
 
       <style>{`.input{width:100%;border-radius:.5rem;border:1px solid var(--color-border);background:var(--color-background);padding:.5rem .65rem;font-size:.875rem;outline:none}.input:focus{border-color:var(--color-primary);box-shadow:0 0 0 3px color-mix(in oklab,var(--color-primary) 25%,transparent)}`}</style>

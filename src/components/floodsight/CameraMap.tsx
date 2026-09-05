@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Camera } from "@/lib/subay/types";
+import type { Camera } from "@/lib/floodsight/types";
 import type * as Leaflet from "leaflet";
 
 const COLORS: Record<Camera["floodStatus"], string> = {
@@ -14,17 +14,19 @@ function pinIcon(L: typeof Leaflet, color: string) {
       <div style="position:absolute;inset:0;background:${color};-webkit-mask:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><path d=%22M12 2C8 2 5 5 5 9c0 5 7 13 7 13s7-8 7-13c0-4-3-7-7-7z%22/></svg>') center/contain no-repeat;mask:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><path d=%22M12 2C8 2 5 5 5 9c0 5 7 13 7 13s7-8 7-13c0-4-3-7-7-7z%22/></svg>') center/contain no-repeat;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3));"></div>
       <div style="position:absolute;top:6px;left:9px;width:10px;height:10px;border-radius:50%;background:#fff;"></div>
     </div>`;
-  return L.divIcon({ html, className: "subay-pin", iconSize: [28, 36], iconAnchor: [14, 34], popupAnchor: [0, -30] });
+  return L.divIcon({ html, className: "floodsight-pin", iconSize: [28, 36], iconAnchor: [14, 34], popupAnchor: [0, -30] });
 }
 
 export function CameraMap({
   cameras,
   onSelect,
   height = 380,
+  focusId,
 }: {
   cameras: Camera[];
   onSelect?: (id: string) => void;
   height?: number;
+  focusId?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Leaflet.Map | null>(null);
@@ -88,6 +90,15 @@ export function CameraMap({
       m.bindPopup(popup);
     });
   }, [cameras, onSelect, ready]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready || !focusId) return;
+    const marker = markersRef.current.get(focusId);
+    if (!marker) return;
+    map.flyTo(marker.getLatLng(), 16);
+    marker.openPopup();
+  }, [focusId, ready, cameras]);
 
   return (
     <div

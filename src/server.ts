@@ -2,7 +2,7 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
-import { getCameraFeeds, updateCameraFeed } from "./lib/db.server";
+import { getCameraFeeds, updateCameraFeed, createCameraFeed } from "./lib/db.server";
 import {
   fetchCameraSnapshot,
   CameraAuthError,
@@ -56,6 +56,33 @@ export default {
           return new Response(JSON.stringify(feeds), {
             headers: { "content-type": "application/json; charset=utf-8" },
           });
+        }
+
+        if (request.method === "POST") {
+          try {
+            const body = await request.json();
+            const camera = body?.camera;
+            if (!camera || typeof camera !== "object") {
+              return new Response(JSON.stringify({ error: "Invalid camera payload" }), {
+                status: 400,
+                headers: { "content-type": "application/json; charset=utf-8" },
+              });
+            }
+
+            const created = await createCameraFeed(camera);
+            return new Response(JSON.stringify(created), {
+              status: 201,
+              headers: { "content-type": "application/json; charset=utf-8" },
+            });
+          } catch (error) {
+            return new Response(
+              JSON.stringify({ error: error instanceof Error ? error.message : "Create failed" }),
+              {
+                status: 500,
+                headers: { "content-type": "application/json; charset=utf-8" },
+              },
+            );
+          }
         }
       }
 

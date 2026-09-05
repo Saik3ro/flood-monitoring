@@ -1,4 +1,4 @@
-import type { FloodStatus } from "@/lib/subay/types";
+import type { FloodStatus } from "@/lib/floodsight/types";
 import { cn } from "@/lib/utils";
 
 const styles: Record<FloodStatus, string> = {

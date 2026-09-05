@@ -1,10 +1,10 @@
 import "dotenv/config";
 import { MongoClient, ObjectId } from "mongodb";
 
-import { statusFromLevel, type Camera, type FloodStatus } from "./subay/types";
+import { statusFromLevel, type Camera, type FloodStatus } from "./floodsight/types";
 
 const MONGODB_URI = process.env.MONGODB_URI;
-const MONGODB_DB = process.env.MONGODB_DB ?? "subay";
+const MONGODB_DB = process.env.MONGODB_DB ?? "floodsight";
 const MONGODB_COLLECTION = process.env.MONGODB_COLLECTION ?? "cameras";
 
 if (!MONGODB_URI) {
@@ -25,6 +25,7 @@ type RawCameraDoc = {
   status?: string;
   water_level?: number;
   location?: { type: string; coordinates: [number, number] } | string;
+  location_label?: string;
   timestamp?: string;
   stream_config?: {
     ipAddress: string;
@@ -32,6 +33,15 @@ type RawCameraDoc = {
     username?: string;
     password?: string;
     snapshotPath?: string;
+  };
+  roi_config?: { x: number; y: number; width: number; height: number };
+  hsv_thresholds?: {
+    h_min: number;
+    h_max: number;
+    s_min: number;
+    s_max: number;
+    v_min: number;
+    v_max: number;
   };
 };
 
@@ -44,10 +54,11 @@ function normalizeFloodStatus(status: string | undefined, waterLevel: number): F
   return statusFromLevel(waterLevel);
 }
 
-function locationLabel(location: RawCameraDoc["location"], index: number): string {
-  if (typeof location === "string") return location;
-  if (location?.type === "Point" && Array.isArray(location.coordinates)) {
-    const [lng, lat] = location.coordinates;
+function locationLabel(doc: RawCameraDoc, index: number): string {
+  if (doc.location_label) return doc.location_label;
+  if (typeof doc.location === "string") return doc.location;
+  if (doc.location?.type === "Point" && Array.isArray(doc.location.coordinates)) {
+    const [lng, lat] = doc.location.coordinates;
     return `CCTV ${index + 1} · ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
   }
   return `CCTV ${index + 1}`;
@@ -55,7 +66,7 @@ function locationLabel(location: RawCameraDoc["location"], index: number): strin
 
 function mapCamera(doc: RawCameraDoc, index: number): Camera {
   const waterLevel = typeof doc.water_level === "number" ? doc.water_level : 0;
-  const location = locationLabel(doc.location, index);
+  const location = locationLabel(doc, index);
 
   const coordinates =
     typeof doc.location === "object" && doc.location?.type === "Point" && Array.isArray(doc.location.coordinates)
@@ -71,8 +82,8 @@ function mapCamera(doc: RawCameraDoc, index: number): Camera {
     timestamp: doc.timestamp ?? new Date().toISOString(),
     snapshotUrl: `https://picsum.photos/seed/${doc._id.toString().slice(-8)}/640/400`,
     streamConfig: doc.stream_config ?? undefined,
-    roiConfig: { x: 110, y: 180, width: 320, height: 380 },
-    hsvThresholds: { h_min: 0, h_max: 30, s_min: 50, s_max: 255, v_min: 40, v_max: 255 },
+    roiConfig: doc.roi_config ?? { x: 110, y: 180, width: 320, height: 380 },
+    hsvThresholds: doc.hsv_thresholds ?? { h_min: 0, h_max: 30, s_min: 50, s_max: 255, v_min: 40, v_max: 255 },
   };
 }
 
@@ -122,20 +133,16 @@ export async function getCameraFeeds(): Promise<Camera[]> {
   return docs.map(mapCamera);
 }
 
-export async function updateCameraFeed(id: string, camera: Camera): Promise<Camera> {
-  const client = await clientPromise;
-  const db = client.db(MONGODB_DB);
-  const collection = db.collection<RawCameraDoc>(MONGODB_COLLECTION);
-
+function buildCameraSetPayload(camera: Camera): Record<string, unknown> {
   const setPayload: Record<string, unknown> = {
-    location: camera.location,
-    water_level: camera.waterLevel,
-    status: camera.floodStatus,
-    timestamp: camera.timestamp,
-    coordinates: {
+    location: {
       type: "Point",
       coordinates: [camera.coordinates.lng, camera.coordinates.lat],
     },
+    location_label: camera.location,
+    water_level: camera.waterLevel,
+    status: camera.floodStatus,
+    timestamp: camera.timestamp,
     roi_config: camera.roiConfig,
     hsv_thresholds: camera.hsvThresholds,
   };
@@ -144,17 +151,30 @@ export async function updateCameraFeed(id: string, camera: Camera): Promise<Came
     setPayload.stream_config = camera.streamConfig;
   }
 
-  const result = await collection.updateOne(
+  return setPayload;
+}
+
+export async function updateCameraFeed(id: string, camera: Camera): Promise<Camera> {
+  const client = await clientPromise;
+  const db = client.db(MONGODB_DB);
+  const collection = db.collection<RawCameraDoc>(MONGODB_COLLECTION);
+
+  await collection.updateOne(
     { _id: parseDocumentId(id) },
-    {
-      $set: setPayload,
-    },
+    { $set: buildCameraSetPayload(camera) },
     { upsert: true },
   );
 
-  if (result.matchedCount === 0 && result.upsertedId) {
-    return camera;
-  }
-
   return camera;
+}
+
+export async function createCameraFeed(camera: Camera): Promise<Camera> {
+  const client = await clientPromise;
+  const db = client.db(MONGODB_DB);
+  const collection = db.collection<RawCameraDoc>(MONGODB_COLLECTION);
+
+  const doc = buildCameraSetPayload(camera) as RawCameraDoc;
+  const result = await collection.insertOne(doc);
+
+  return mapCamera({ ...doc, _id: result.insertedId }, 0);
 }

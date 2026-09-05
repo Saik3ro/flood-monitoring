@@ -59,12 +59,12 @@ export default function LoginPage() {
             <div className="mb-4 grid h-16 w-16 place-items-center rounded-full bg-[#0080d7]/10">
               <Waves className="h-8 w-8 text-[#0080d7]" />
             </div>
-            <p className="text-xs uppercase tracking-[0.3em] text-[#0080d7] font-semibold">SUBAY</p>
-            <h1 className="mt-2 text-3xl font-bold text-[#0080d7]">Welcome to SUBAY</h1>
+            <p className="text-xs uppercase tracking-[0.3em] text-[#0080d7] font-semibold">FloodSight</p>
+            <h1 className="mt-2 text-3xl font-bold text-[#0080d7]">Welcome to FloodSight</h1>
           </div>
 
           <p className="mb-8 text-center text-sm text-[#62748e]">
-            Sign in to monitor flood conditions with live CCTV feeds and real-time alerts
+            Sign in to monitor flood conditions with live CCTV feeds and real-time routing guidance
           </p>
 
           {error ? (
@@ -84,7 +84,7 @@ export default function LoginPage() {
           </button>
 
           <div className="mt-8 border-t border-[#e2e8f0] pt-6 text-center text-xs text-[#62748e]">
-            © 2026 SUBAY. All rights reserved.
+            © 2026 FloodSight. All rights reserved.
           </div>
         </div>
       </div>

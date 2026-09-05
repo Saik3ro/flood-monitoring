@@ -3,9 +3,9 @@ import type { Camera, User, Role } from "./types";
 import { statusFromLevel } from "./types";
 
 const SNAPSHOTS = [
-  "https://picsum.photos/seed/subay-recto/640/400",
-  "https://picsum.photos/seed/subay-divisoria/640/400",
-  "https://picsum.photos/seed/subay-carmen/640/400",
+  "https://picsum.photos/seed/floodsight-recto/640/400",
+  "https://picsum.photos/seed/floodsight-divisoria/640/400",
+  "https://picsum.photos/seed/floodsight-carmen/640/400",
 ];
 
 const initialCameras: Camera[] = [
@@ -71,7 +71,7 @@ interface State {
   currentUserId: string | null;
 }
 
-const LS_KEY = "subay-state-v1";
+const LS_KEY = "floodsight-state-v1";
 
 function load(): State {
   if (typeof window === "undefined") {
@@ -228,6 +228,11 @@ export const store = {
     set((s) => ({
       ...s,
       cameras: s.cameras.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+    })),
+  addCamera: (camera: Camera) =>
+    set((s) => ({
+      ...s,
+      cameras: [...s.cameras, camera],
     })),
   syncCameras: (cameras: Camera[]) =>
     set((s) => ({

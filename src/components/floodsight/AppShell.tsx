@@ -1,5 +1,5 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { LogOut, LayoutDashboard, Settings, Users, Waves } from "lucide-react";
+import { LogOut, LayoutDashboard, Map, Settings, Users, Waves } from "lucide-react";
 import { useAuth } from "@/context/AuthContext.jsx";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
@@ -11,6 +11,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const nav = [
     { to: "/", label: "Dashboard", icon: LayoutDashboard, show: true },
+    { to: "/map-view", label: "Map View", icon: Map, show: true },
     { to: "/config", label: "Camera Config", icon: Settings, show: isAdmin },
     { to: "/users", label: "User Access", icon: Users, show: isAdmin },
   ];
@@ -28,9 +29,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Waves className="h-5 w-5" />
             </div>
             <div className="leading-tight">
-              <div className="text-base font-bold tracking-tight">SUBAY</div>
+              <div className="text-base font-bold tracking-tight">FloodSight</div>
               <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                Flood Watch · CDO
+                Watching the water, guiding the way
               </div>
             </div>
           </Link>

@@ -71,9 +71,13 @@ export function CameraMap({
       }
     }
     cameras.forEach((c) => {
+      const snapshotImage = c.streamConfig?.ipAddress
+        ? `/api/cameras/${encodeURIComponent(c.id)}/snapshot?ts=${Date.now()}`
+        : c.snapshotUrl;
+
       const popup = `
         <div style="font-family:inherit;min-width:200px">
-          <img src="${c.snapshotUrl}" style="width:100%;height:100px;object-fit:cover;border-radius:6px;margin-bottom:8px"/>
+          <img src="${snapshotImage}" style="width:100%;height:100px;object-fit:cover;border-radius:6px;margin-bottom:8px"/>
           <div style="font-weight:600;font-size:13px">${c.location}</div>
           <div style="font-size:12px;color:#666;margin-top:2px">${c.floodStatus} · ${(c.waterLevel * 100).toFixed(0)} cm</div>
           <div style="font-size:11px;color:#999;margin-top:2px">${new Date(c.timestamp).toLocaleTimeString()}</div>

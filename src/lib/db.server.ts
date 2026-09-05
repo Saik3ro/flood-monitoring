@@ -92,14 +92,17 @@ function mapCamera(doc: RawCameraDoc, index: number): Camera {
     ],
   };
 
+  const cameraId = doc._id.toString();
+  const hasStreamConfig = Boolean(doc.stream_config?.ipAddress);
+
   return {
-    id: doc._id.toString(),
+    id: cameraId,
     location,
     coordinates,
     waterLevel,
     floodStatus: normalizeFloodStatus(doc.status, waterLevel),
     timestamp: doc.timestamp ?? new Date().toISOString(),
-    snapshotUrl: `https://picsum.photos/seed/${doc._id.toString().slice(-8)}/640/400`,
+    snapshotUrl: hasStreamConfig ? `/api/cameras/${encodeURIComponent(cameraId)}/snapshot` : `https://picsum.photos/seed/${cameraId.slice(-8)}/640/400`,
     streamConfig: doc.stream_config ?? undefined,
     roiConfig,
     hsvThresholds: doc.hsv_thresholds ?? { h_min: 0, h_max: 30, s_min: 50, s_max: 255, v_min: 40, v_max: 255 },

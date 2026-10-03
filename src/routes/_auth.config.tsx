@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Plus, Save, Search, ShieldAlert } from "lucide-react";
 import { store, useStore } from "@/lib/floodsight/store";
 import { useAuth } from "@/context/AuthContext.jsx";
-import type { Camera, FloodStatus } from "@/lib/floodsight/types";
+import type { Camera, FloodStatus, RoiPoint } from "@/lib/floodsight/types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -50,6 +50,39 @@ const blankCamera: Camera = {
     snapshotPath: "/cgi-bin/snapshot.cgi?channel=1&subtype=0",
   },
 };
+
+function getRoiVertices(roi: Camera["roiConfig"]): RoiPoint[] {
+  if (roi.vertices?.length === 4) return [...roi.vertices];
+  return [
+    { x: roi.x, y: roi.y },
+    { x: roi.x + roi.width, y: roi.y },
+    { x: roi.x + roi.width, y: roi.y + roi.height },
+    { x: roi.x, y: roi.y + roi.height },
+  ];
+}
+
+function roiFromVertices(
+  vertices: RoiPoint[],
+  imageWidth: number,
+  imageHeight: number,
+): Camera["roiConfig"] {
+  const boundedVertices = vertices.map((point) => ({
+    x: Math.min(Math.max(Math.round(point.x), 0), imageWidth),
+    y: Math.min(Math.max(Math.round(point.y), 0), imageHeight),
+  }));
+  const xValues = boundedVertices.map((point) => point.x);
+  const yValues = boundedVertices.map((point) => point.y);
+  const x = Math.min(...xValues);
+  const y = Math.min(...yValues);
+
+  return {
+    x,
+    y,
+    width: Math.max(...xValues) - x,
+    height: Math.max(...yValues) - y,
+    vertices: boundedVertices,
+  };
+}
 
 function ConfigPage() {
   const { isAdmin } = useAuth();
@@ -100,7 +133,8 @@ function ConfigPage() {
     );
   }
 
-  const active = cameras.find((c) => c.id === activeId) ?? (cameras.length > 0 ? cameras[0] : blankCamera);
+  const active =
+    cameras.find((c) => c.id === activeId) ?? (cameras.length > 0 ? cameras[0] : blankCamera);
   const hasCameras = cameras.length > 0;
 
   const numbered = cameras.map((c, i) => ({ ...c, displayNumber: i + 1 }));
@@ -174,12 +208,22 @@ function ConfigPage() {
         ) : null}
       </div>
 
-      <CameraEditor key={active.id} camera={active} onCreated={(created) => setActiveId(created.id)} />
+      <CameraEditor
+        key={active.id}
+        camera={active}
+        onCreated={(created) => setActiveId(created.id)}
+      />
     </div>
   );
 }
 
-function CameraEditor({ camera, onCreated }: { camera: Camera; onCreated?: (camera: Camera) => void }) {
+function CameraEditor({
+  camera,
+  onCreated,
+}: {
+  camera: Camera;
+  onCreated?: (camera: Camera) => void;
+}) {
   const [draft, setDraft] = useState<Camera>(camera);
   const [previewUrl, setPreviewUrl] = useState<string | null>(camera.snapshotUrl || null);
   const [isFetchingSnapshot, setIsFetchingSnapshot] = useState(false);
@@ -192,6 +236,7 @@ function CameraEditor({ camera, onCreated }: { camera: Camera; onCreated?: (came
     height: number;
   } | null>(null);
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
+  const [draggingVertex, setDraggingVertex] = useState<number | null>(null);
   const [imageAspectRatio, setImageAspectRatio] = useState<number | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
 
@@ -200,6 +245,7 @@ function CameraEditor({ camera, onCreated }: { camera: Camera; onCreated?: (came
     setPendingRoi(null);
     setPreviewRect(null);
     setDragStart(null);
+    setDraggingVertex(null);
     setImageAspectRatio(null);
 
     setPreviewUrl((current) => {
@@ -249,17 +295,6 @@ function CameraEditor({ camera, onCreated }: { camera: Camera; onCreated?: (came
     };
   }
 
-  function buildStyleFromRoi(roi: Camera["roiConfig"] | null): React.CSSProperties | undefined {
-    const image = imageRef.current;
-    if (!roi || !image || !image.naturalWidth || !image.naturalHeight) return undefined;
-    return {
-      left: `${(roi.x / image.naturalWidth) * 100}%`,
-      top: `${(roi.y / image.naturalHeight) * 100}%`,
-      width: `${(roi.width / image.naturalWidth) * 100}%`,
-      height: `${(roi.height / image.naturalHeight) * 100}%`,
-    };
-  }
-
   function styleFromPreviewRect(
     rect: { x: number; y: number; width: number; height: number } | null,
   ) {
@@ -275,12 +310,20 @@ function CameraEditor({ camera, onCreated }: { camera: Camera; onCreated?: (came
   function naturalizeRect(rect: { x: number; y: number; width: number; height: number }) {
     const bounds = getRenderBounds();
     if (!bounds) return null;
-    return {
-      x: Math.round(rect.x * bounds.naturalWidth),
-      y: Math.round(rect.y * bounds.naturalHeight),
-      width: Math.round(rect.width * bounds.naturalWidth),
-      height: Math.round(rect.height * bounds.naturalHeight),
-    };
+    const x = Math.round(rect.x * bounds.naturalWidth);
+    const y = Math.round(rect.y * bounds.naturalHeight);
+    const right = Math.round((rect.x + rect.width) * bounds.naturalWidth);
+    const bottom = Math.round((rect.y + rect.height) * bounds.naturalHeight);
+    return roiFromVertices(
+      [
+        { x, y },
+        { x: right, y },
+        { x: right, y: bottom },
+        { x, y: bottom },
+      ],
+      bounds.naturalWidth,
+      bounds.naturalHeight,
+    );
   }
 
   useEffect(() => {
@@ -302,6 +345,18 @@ function CameraEditor({ camera, onCreated }: { camera: Camera; onCreated?: (came
   }
 
   function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    if (draggingVertex !== null) {
+      const point = pointInPercents(event.clientX, event.clientY);
+      const bounds = getRenderBounds();
+      if (!point || !bounds) return;
+      const vertices = getRoiVertices(pendingRoi ?? draft.roiConfig);
+      vertices[draggingVertex] = {
+        x: Math.round(point.x * bounds.naturalWidth),
+        y: Math.round(point.y * bounds.naturalHeight),
+      };
+      setPendingRoi(roiFromVertices(vertices, bounds.naturalWidth, bounds.naturalHeight));
+      return;
+    }
     if (!dragStart) return;
     const point = pointInPercents(event.clientX, event.clientY);
     if (!point) return;
@@ -309,6 +364,10 @@ function CameraEditor({ camera, onCreated }: { camera: Camera; onCreated?: (came
   }
 
   function finishDrag() {
+    if (draggingVertex !== null) {
+      setDraggingVertex(null);
+      return;
+    }
     if (!previewRect) {
       setDragStart(null);
       return;
@@ -332,6 +391,16 @@ function CameraEditor({ camera, onCreated }: { camera: Camera; onCreated?: (came
   function handlePointerCancel() {
     setDragStart(null);
     setPreviewRect(null);
+    setDraggingVertex(null);
+  }
+
+  function beginVertexDrag(event: React.PointerEvent<HTMLButtonElement>, index: number) {
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setPendingRoi(pendingRoi ?? draft.roiConfig);
+    setPreviewRect(null);
+    setDragStart(null);
+    setDraggingVertex(index);
   }
 
   function confirmPendingRoi() {
@@ -469,6 +538,16 @@ function CameraEditor({ camera, onCreated }: { camera: Camera; onCreated?: (came
     }
   }
 
+  const image = imageRef.current;
+  const visibleRoi = pendingRoi ?? draft.roiConfig;
+  const visibleVertices =
+    image?.naturalWidth && image.naturalHeight
+      ? getRoiVertices(visibleRoi).map((point) => ({
+          x: Math.min(Math.max(point.x, 0), image.naturalWidth),
+          y: Math.min(Math.max(point.y, 0), image.naturalHeight),
+        }))
+      : [];
+
   return (
     <div className="grid gap-6 lg:grid-cols-5">
       <div className="lg:col-span-3 overflow-hidden rounded-2xl border border-border bg-card">
@@ -502,14 +581,38 @@ function CameraEditor({ camera, onCreated }: { camera: Camera; onCreated?: (came
             </div>
           )}
 
-          <div
-            className="pointer-events-none absolute border-2 border-primary shadow-[0_0_0_9999px_rgba(0,0,0,0.4)]"
-            style={buildStyleFromRoi(draft.roiConfig)}
-          >
-            <span className="absolute -top-6 left-0 rounded bg-primary px-1.5 py-0.5 text-[10px] font-semibold uppercase text-primary-foreground">
-              ROI
-            </span>
-          </div>
+          {visibleVertices.length === 4 && image?.naturalWidth && image.naturalHeight ? (
+            <>
+              <svg
+                className="pointer-events-none absolute inset-0 h-full w-full"
+                viewBox={`0 0 ${image.naturalWidth} ${image.naturalHeight}`}
+                preserveAspectRatio="none"
+                aria-hidden="true"
+              >
+                <polygon
+                  points={visibleVertices.map((point) => `${point.x},${point.y}`).join(" ")}
+                  fill={pendingRoi ? "rgba(226,232,240,0.12)" : "rgba(59,130,246,0.12)"}
+                  stroke={pendingRoi ? "rgb(226,232,240)" : "var(--primary)"}
+                  strokeWidth="3"
+                  vectorEffect="non-scaling-stroke"
+                />
+              </svg>
+              {visibleVertices.map((point, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  aria-label={`Move ROI vertex ${index + 1}`}
+                  title={`Drag to move ROI vertex ${index + 1}`}
+                  onPointerDown={(event) => beginVertexDrag(event, index)}
+                  className="absolute z-10 h-4 w-4 -translate-x-1/2 -translate-y-1/2 touch-none rounded-full border-2 border-white bg-primary shadow-md cursor-move"
+                  style={{
+                    left: `${(point.x / image.naturalWidth) * 100}%`,
+                    top: `${(point.y / image.naturalHeight) * 100}%`,
+                  }}
+                />
+              ))}
+            </>
+          ) : null}
 
           {previewRect ? (
             <div
@@ -517,22 +620,11 @@ function CameraEditor({ camera, onCreated }: { camera: Camera; onCreated?: (came
               style={styleFromPreviewRect(previewRect)}
             />
           ) : null}
-
-          {pendingRoi ? (
-            <div
-              className="pointer-events-none absolute border-2 border-dashed border-slate-200/90 bg-slate-200/10"
-              style={buildStyleFromRoi(pendingRoi)}
-            >
-              <span className="absolute -top-6 left-0 rounded bg-slate-950 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-50">
-                Pending ROI
-              </span>
-            </div>
-          ) : null}
         </div>
 
         <div className="border-t border-border p-4 text-xs text-muted-foreground">
-          Snapshot from {new Date(camera.timestamp).toLocaleString()} — drag to choose a new ROI,
-          then confirm it.
+          Snapshot from {new Date(camera.timestamp).toLocaleString()} — drag to create an ROI or
+          move a corner handle to reshape it, then confirm.
         </div>
 
         {pendingRoi ? (
@@ -634,7 +726,9 @@ function CameraEditor({ camera, onCreated }: { camera: Camera; onCreated?: (came
               </Field>
               <Field label="Snapshot path">
                 <input
-                  value={draft.streamConfig?.snapshotPath ?? "/cgi-bin/snapshot.cgi?channel=1&subtype=0"}
+                  value={
+                    draft.streamConfig?.snapshotPath ?? "/cgi-bin/snapshot.cgi?channel=1&subtype=0"
+                  }
                   onChange={(e) =>
                     setDraft({
                       ...draft,
@@ -731,7 +825,9 @@ function CameraEditor({ camera, onCreated }: { camera: Camera; onCreated?: (came
         {draft.last_evaluation ? (
           <div className="rounded-xl border border-border bg-muted/40 p-3 text-xs">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="font-semibold uppercase tracking-wide text-muted-foreground">Latest result</span>
+              <span className="font-semibold uppercase tracking-wide text-muted-foreground">
+                Latest result
+              </span>
               <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-medium uppercase text-foreground">
                 {draft.last_evaluation.status ?? "UNKNOWN"}
               </span>
